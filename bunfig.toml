@@ -1,0 +1,4 @@
+exact = true
+auto = "fallback"
+
+"@prisma/client" = { optional = false }
