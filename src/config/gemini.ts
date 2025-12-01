@@ -4,7 +4,7 @@ import { env } from './env';
 export const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
 
 export const geminiModels = {
-  pro: genAI.getGenerativeModel({ model: 'gemini-pro' }),
+  pro: genAI.getGenerativeModel({ model: 'gemini-2.5-flash' }),
   proVision: genAI.getGenerativeModel({ model: 'gemini-pro-vision' }),
 };
 
