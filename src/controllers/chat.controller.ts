@@ -66,17 +66,32 @@ export class ChatController {
   }
 
   async searchKnowledge(c: Context) {
-    const workspace = c.get('workspace');
-    const { query, category, limit } = c.get('validated');
+  const workspace = c.get('workspace');
+  const { query, category, limit } = c.get('validated');
 
-    const results = await geminiService.searchKnowledge(
-      query,
-      workspace.id,
-      limit || 5
-    );
+  const searchTerms = query.toLowerCase().split(' ');
 
-    return successResponse(c, { results });
+  const where: any = {
+    workspaceId: workspace.id,
+    OR: [
+      { title: { contains: query, mode: 'insensitive' } },
+      { content: { contains: query, mode: 'insensitive' } },
+      ...searchTerms.map((term: any) => ({ tags: { has: term } }))
+    ],
+  };
+
+  if (category) {
+    where.category = category;
   }
+
+  const results = await prisma.knowledgeBase.findMany({
+    where,
+    take: limit || 5,
+    orderBy: { updatedAt: 'desc' },
+  });
+
+  return successResponse(c, { results });
+}
 }
 
 export const chatController = new ChatController();
