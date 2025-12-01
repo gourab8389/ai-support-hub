@@ -9,6 +9,7 @@ import { workspaceRoutes } from './routes/workspace.routes';
 import { ticketRoutes } from './routes/ticket.routes';
 import { chatRoutes } from './routes/chat.routes';
 import knowledgeRoutes from './routes/knowledge.routes';
+import analyticsRoutes from './routes/analytics.routes';
 
 const app = new Hono();
 
@@ -33,6 +34,7 @@ app.route('/api/workspaces', workspaceRoutes);
 app.route('/api/tickets', ticketRoutes);
 app.route('/api/chat', chatRoutes);
 app.route('/api/knowledge', knowledgeRoutes);
+app.route('/api/analytics', analyticsRoutes);
 
 // 404 handler
 app.notFound((c) => {
