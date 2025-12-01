@@ -94,14 +94,17 @@ export class GeminiService {
     workspaceId: string,
     limit = 5
   ): Promise<any[]> {
-    // Simple text search - in production, use vector embeddings
+    const searchTerms = query.toLowerCase().split(" ");
+
     const results = await prisma.knowledgeBase.findMany({
       where: {
         workspaceId,
         OR: [
           { title: { contains: query, mode: "insensitive" } },
           { content: { contains: query, mode: "insensitive" } },
-          { tags: { has: query.toLowerCase() } },
+          { category: { contains: query, mode: "insensitive" } },
+          // Search if ANY tag matches ANY word in query
+          ...searchTerms.map((term) => ({ tags: { has: term } })),
         ],
       },
       take: limit,
