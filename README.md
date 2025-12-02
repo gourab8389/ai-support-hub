@@ -138,10 +138,3 @@ async function sendQuery(apiUrl, apiKey, payload) {
 - Add tests and CI for API stability
 
 ---
-
-If you'd like, I can also:
-- Add Postman collection / OpenAPI spec for the endpoints
-- Create a simple frontend widget example repo
-- Add GitHub Actions to run lint/tests
-
-Enjoy — open an issue or PR if you want help implementing any of the next steps.
