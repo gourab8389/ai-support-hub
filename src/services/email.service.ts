@@ -241,37 +241,94 @@ export class EmailService {
       to: agentEmail,
       subject: `New Support Ticket: ${ticketSubject}`,
       html: `
-        
-        
-          
-            
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .ticket-info { background: #f3f4f6; padding: 15px; border-radius: 6px; margin: 20px 0; }
-              .button { 
-                display: inline-block; 
-                padding: 12px 24px; 
-                background: #6366f1; 
-                color: white; 
-                text-decoration: none; 
-                border-radius: 6px; 
-                margin: 20px 0;
-              }
-            
-          
-          
-            
-              New Support Ticket Assigned
-              
-                Subject: ${ticketSubject}
-                Customer: ${customerName}
-                Ticket ID: ${ticketId}
-              
-              View Ticket
-            
-          
-        
-      `,
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>New Ticket</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f3f4f6;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      background: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    }
+    .header {
+      background: #6366f1;
+      color: #ffffff;
+      padding: 24px;
+      text-align: center;
+      font-size: 22px;
+      font-weight: bold;
+    }
+    .content {
+      padding: 32px;
+      color: #333333;
+      line-height: 1.6;
+      font-size: 15px;
+    }
+    .ticket-box {
+      background: #f9fafb;
+      border-radius: 6px;
+      padding: 16px;
+      margin: 20px 0;
+    }
+    .button {
+      display: inline-block;
+      padding: 14px 28px;
+      background: #6366f1;
+      color: #ffffff !important;
+      text-decoration: none;
+      border-radius: 6px;
+      margin-top: 20px;
+      font-weight: bold;
+    }
+    .footer {
+      padding: 20px;
+      text-align: center;
+      font-size: 12px;
+      color: #6b7280;
+      background: #f9fafb;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      New Ticket Assigned
+    </div>
+
+    <div class="content">
+      <p>You have been assigned a new support ticket.</p>
+
+      <div class="ticket-box">
+        <p><strong>Subject:</strong> ${ticketSubject}</p>
+        <p><strong>Customer:</strong> ${customerName}</p>
+        <p><strong>Ticket ID:</strong> ${ticketId}</p>
+      </div>
+
+      <p style="text-align: center;">
+        <a href="${ticketUrl}" class="button">
+          View Ticket
+        </a>
+      </p>
+    </div>
+
+    <div class="footer">
+      © ${new Date().getFullYear()} AI Support Hub. All rights reserved.
+    </div>
+  </div>
+</body>
+</html>
+    `,
     });
   }
 }
