@@ -123,40 +123,108 @@ export class EmailService {
       to: email,
       subject: "Reset Your Password - AI Support Hub",
       html: `
-        
-        
-          
-            
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .button { 
-                display: inline-block; 
-                padding: 12px 24px; 
-                background: #6366f1; 
-                color: white; 
-                text-decoration: none; 
-                border-radius: 6px; 
-                margin: 20px 0;
-              }
-              .footer { margin-top: 30px; font-size: 12px; color: #666; }
-            
-          
-          
-            
-              Reset Your Password
-              Hi ${name},
-              We received a request to reset your password. Click the button below to create a new password:
-              Reset Password
-              Or copy and paste this link into your browser:
-              ${resetUrl}
-              This link will expire in 1 hour.
-              
-                If you didn't request a password reset, please ignore this email or contact support if you have concerns.
-              
-            
-          
-        
-      `,
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Password Reset</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f3f4f6;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      background: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    }
+    .header {
+      background: #6366f1;
+      color: #ffffff;
+      padding: 24px;
+      text-align: center;
+      font-size: 22px;
+      font-weight: bold;
+    }
+    .content {
+      padding: 32px;
+      color: #333333;
+      line-height: 1.6;
+      font-size: 15px;
+    }
+    .button {
+      display: inline-block;
+      padding: 14px 28px;
+      background: #6366f1;
+      color: #ffffff !important;
+      text-decoration: none;
+      border-radius: 6px;
+      margin: 24px 0;
+      font-weight: bold;
+    }
+    .link {
+      word-break: break-all;
+      color: #6366f1;
+      font-size: 13px;
+    }
+    .footer {
+      padding: 20px;
+      text-align: center;
+      font-size: 12px;
+      color: #6b7280;
+      background: #f9fafb;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      Password Reset
+    </div>
+
+    <div class="content">
+      <p>Hi <strong>${name}</strong>,</p>
+
+      <p>
+        We received a request to reset your password.  
+        Click the button below to create a new one.
+      </p>
+
+      <p style="text-align: center;">
+        <a href="${resetUrl}" class="button">
+          Reset Password
+        </a>
+      </p>
+
+      <p>
+        Or copy and paste this link:
+      </p>
+
+      <p class="link">
+        ${resetUrl}
+      </p>
+
+      <p>
+        ⏰ This link will expire in <strong>1 hour</strong>.
+      </p>
+
+      <p>
+        If you didn’t request this, please ignore this email or contact support.
+      </p>
+    </div>
+
+    <div class="footer">
+      © ${new Date().getFullYear()} AI Support Hub. All rights reserved.
+    </div>
+  </div>
+</body>
+</html>
+    `,
     });
   }
 
