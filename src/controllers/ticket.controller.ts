@@ -70,13 +70,12 @@ export class TicketController {
   }
 
   async list(c: Context) {
-    const { workspaceId } = c.req.param();
-    const user = c.get('user');
+    const workspace = c.get('workspace');
     const { status, priority, page = '1', limit = '20' } = c.req.query();
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where: any = { workspaceId };
+    const where: any = { workspaceId: workspace.id };
 
     if (status) where.status = status;
     if (priority) where.priority = priority;
@@ -134,12 +133,16 @@ export class TicketController {
   }
 
   async addMessage(c: Context) {
+    const workspace = c.get('workspace');
     const { ticketId } = c.req.param();
     const user = c.get('user');
     const { content, isInternal } = c.get('validated');
 
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
+    const ticket = await prisma.ticket.findFirst({
+      where: {
+        id: ticketId,
+        workspaceId: workspace.id,
+      },
     });
 
     if (!ticket) {
@@ -170,10 +173,21 @@ export class TicketController {
     return successResponse(c, { message }, 'Message added successfully', 201);
   }
 
-  async update(c: Context) {
+async update(c: Context) {
   const { ticketId } = c.req.param();
   const data = c.get('validated');
   const workspace = c.get("workspace");
+
+  const existingTicket = await prisma.ticket.findFirst({
+    where: {
+      id: ticketId,
+      workspaceId: workspace.id,
+    },
+  });
+
+  if (!existingTicket) {
+    throw new ApiError('Ticket not found', 404);
+  }
 
   // Validate assigned agent
   if (data.assignedToId) {
@@ -190,7 +204,7 @@ export class TicketController {
   }
 
   const ticket = await prisma.ticket.update({
-    where: { id: ticketId },
+    where: { id: existingTicket.id },
     data: {
       ...data,
       resolvedAt: data.status === 'RESOLVED' ? new Date() : undefined,

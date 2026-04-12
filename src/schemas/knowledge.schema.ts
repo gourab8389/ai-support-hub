@@ -17,5 +17,5 @@ export const updateKnowledgeSchema = z.object({
 export const searchKnowledgeSchema = z.object({
   query: z.string().min(1),
   category: z.string().optional(),
-  limit: z.string().optional().transform(val => val ? parseInt(val) : 10),
+  limit: z.coerce.number().int().min(1).max(25).default(10),
 });

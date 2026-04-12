@@ -5,6 +5,7 @@ export const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
 
 export const geminiModels = {
   pro: genAI.getGenerativeModel({ model: 'gemini-2.5-flash' }),
+  embedding: genAI.getGenerativeModel({ model: 'gemini-embedding-001' }),
   proVision: genAI.getGenerativeModel({ model: 'gemini-pro-vision' }),
 };
 

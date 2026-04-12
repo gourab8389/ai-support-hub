@@ -16,11 +16,29 @@ export class ChatController {
 
     // If ticket ID provided, add message to existing ticket
     if (data.ticketId) {
+      const ticket = await prisma.ticket.findFirst({
+        where: {
+          id: data.ticketId,
+          workspaceId: workspace.id,
+        },
+        select: { id: true },
+      });
+
+      if (!ticket) {
+        return successResponse(c, {
+          response: 'The requested conversation could not be found for this workspace.',
+          confidence: 0,
+          needsHumanEscalation: true,
+          suggestedActions: ['Create a new ticket'],
+          sentiment: 'neutral',
+        });
+      }
+
       await prisma.message.create({
         data: {
           content: data.message,
           sender: 'CUSTOMER',
-          ticketId: data.ticketId,
+          ticketId: ticket.id,
           sentiment: aiResponse.sentiment,
         },
       });
@@ -30,7 +48,7 @@ export class ChatController {
           data: {
             content: aiResponse.response,
             sender: 'AI',
-            ticketId: data.ticketId,
+            ticketId: ticket.id,
           },
         });
       }
@@ -66,32 +84,21 @@ export class ChatController {
   }
 
   async searchKnowledge(c: Context) {
-  const workspace = c.get('workspace');
-  const { query, category, limit } = c.get('validated');
+    const workspace = c.get('workspace');
+    const { query, category, limit } = c.get('validated');
 
-  const searchTerms = query.toLowerCase().split(' ');
+    const results = await geminiService.searchKnowledge(
+      query,
+      workspace.id,
+      limit || 5
+    );
 
-  const where: any = {
-    workspaceId: workspace.id,
-    OR: [
-      { title: { contains: query, mode: 'insensitive' } },
-      { content: { contains: query, mode: 'insensitive' } },
-      ...searchTerms.map((term: any) => ({ tags: { has: term } }))
-    ],
-  };
+    const filteredResults = category
+      ? results.filter((item) => item.category === category)
+      : results;
 
-  if (category) {
-    where.category = category;
+    return successResponse(c, { results: filteredResults });
   }
-
-  const results = await prisma.knowledgeBase.findMany({
-    where,
-    take: limit || 5,
-    orderBy: { updatedAt: 'desc' },
-  });
-
-  return successResponse(c, { results });
-}
 }
 
 export const chatController = new ChatController();

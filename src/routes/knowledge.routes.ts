@@ -3,10 +3,13 @@ import { knowledgeController } from '@/controllers/knowledge.controller';
 import { authMiddleware } from '@/middlewares/auth';
 import { validate } from '@/middlewares/validator';
 import { createKnowledgeSchema, updateKnowledgeSchema } from '@/schemas/knowledge.schema';
+import { loadWorkspace, requireWorkspaceMember } from '@/middlewares/workspace';
 
 const knowledgeRoutes = new Hono();
 
 knowledgeRoutes.use('/*', authMiddleware);
+knowledgeRoutes.use('/:workspaceId', loadWorkspace, requireWorkspaceMember());
+knowledgeRoutes.use('/:workspaceId/*', loadWorkspace, requireWorkspaceMember());
 
 knowledgeRoutes.post(
   '/:workspaceId',

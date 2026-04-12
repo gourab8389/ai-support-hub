@@ -1,7 +1,7 @@
 import { Context } from 'hono';
 import { prisma } from '@/config/database';
 import { successResponse, ApiError } from '@/utils/response';
-import { nanoid } from 'nanoid';
+import { generateRawApiKey, hashApiKey } from '@/utils/apiKey';
 
 export class WorkspaceController {
   async create(c: Context) {
@@ -141,7 +141,7 @@ export class WorkspaceController {
   async generateApiKey(c: Context) {
     const { workspaceId } = c.req.param();
     const user = c.get('user');
-    const { name } = await c.req.json();
+    const { name } = c.get('validated');
 
     const member = await prisma.workspaceMember.findFirst({
       where: {
@@ -155,18 +155,28 @@ export class WorkspaceController {
       throw new ApiError('Insufficient permissions', 403);
     }
 
-    const key = `sk_${nanoid(32)}`;
+    const rawKey = generateRawApiKey();
 
     const apiKey = await prisma.apiKey.create({
       data: {
         name,
-        key,
+        key: hashApiKey(rawKey),
         userId: user.id,
         workspaceId,
       },
     });
 
-    return successResponse(c, { apiKey }, 'API key generated successfully', 201);
+    return successResponse(
+      c,
+      {
+        apiKey: {
+          ...apiKey,
+          key: rawKey,
+        },
+      },
+      'API key generated successfully',
+      201
+    );
   }
   async inviteMember(c: Context) {
   const { workspaceId } = c.req.param();
@@ -206,7 +216,19 @@ async removeMember(c: Context) {
 
   if (!member) throw new ApiError('Insufficient permissions', 403);
 
-  await prisma.workspaceMember.delete({ where: { id: memberId } });
+  const targetMember = await prisma.workspaceMember.findFirst({
+    where: { id: memberId, workspaceId },
+  });
+
+  if (!targetMember) {
+    throw new ApiError('Member not found', 404);
+  }
+
+  if (targetMember.role === 'OWNER' && member.role !== 'OWNER') {
+    throw new ApiError('Only owners can remove owners', 403);
+  }
+
+  await prisma.workspaceMember.delete({ where: { id: targetMember.id } });
 
   return successResponse(c, {}, 'Member removed successfully');
 }
@@ -214,7 +236,7 @@ async removeMember(c: Context) {
 async updateMemberRole(c: Context) {
   const { workspaceId, memberId } = c.req.param();
   const user = c.get('user');
-  const { role } = await c.req.json();
+  const { role } = c.get('validated');
 
   const member = await prisma.workspaceMember.findFirst({
     where: { workspaceId, userId: user.id, role: 'OWNER' },
@@ -222,8 +244,16 @@ async updateMemberRole(c: Context) {
 
   if (!member) throw new ApiError('Only owners can change roles', 403);
 
+  const targetMember = await prisma.workspaceMember.findFirst({
+    where: { id: memberId, workspaceId },
+  });
+
+  if (!targetMember) {
+    throw new ApiError('Member not found', 404);
+  }
+
   const updated = await prisma.workspaceMember.update({
-    where: { id: memberId },
+    where: { id: targetMember.id },
     data: { role },
     include: { user: { select: { id: true, name: true, email: true } } },
   });

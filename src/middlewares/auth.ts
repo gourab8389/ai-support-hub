@@ -3,6 +3,7 @@ import { verify } from 'jsonwebtoken';
 import { config } from '@/config/env';
 import { prisma } from '@/config/database';
 import { ApiError } from '@/utils/response';
+import { hashApiKey } from '@/utils/apiKey';
 
 export interface AuthContext {
   user: {
@@ -84,13 +85,28 @@ export const apiKeyAuth = async (c: Context, next: Next) => {
       throw new ApiError('API key required', 401);
     }
 
-    const key = await prisma.apiKey.findUnique({
-      where: { key: apiKey },
+    const hashedKey = hashApiKey(apiKey);
+
+    let key = await prisma.apiKey.findUnique({
+      where: { key: hashedKey },
       include: {
         workspace: true,
         user: true,
       },
     });
+
+    let shouldMigratePlaintextKey = false;
+
+    if (!key) {
+      key = await prisma.apiKey.findUnique({
+        where: { key: apiKey },
+        include: {
+          workspace: true,
+          user: true,
+        },
+      });
+      shouldMigratePlaintextKey = Boolean(key);
+    }
 
     if (!key) {
       throw new ApiError('Invalid API key', 401);
@@ -99,7 +115,10 @@ export const apiKeyAuth = async (c: Context, next: Next) => {
     // Update last used
     await prisma.apiKey.update({
       where: { id: key.id },
-      data: { lastUsedAt: new Date() },
+      data: {
+        key: shouldMigratePlaintextKey ? hashedKey : undefined,
+        lastUsedAt: new Date(),
+      },
     });
 
     c.set('workspace', key.workspace);

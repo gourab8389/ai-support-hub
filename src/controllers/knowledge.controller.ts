@@ -1,11 +1,26 @@
 import { Context } from 'hono';
 import { prisma } from '@/config/database';
 import { successResponse, ApiError } from '@/utils/response';
+import { geminiService } from '@/services/gemini.service';
+import { logger } from '@/utils/logger';
 
 export class KnowledgeController {
   async create(c: Context) {
-    const { workspaceId } = c.req.param();
+    const workspace = c.get('workspace');
     const data = c.get('validated');
+
+    let embedding: string | null = null;
+
+    try {
+      embedding = await geminiService.generateKnowledgeEmbedding({
+        title: data.title,
+        content: data.content,
+        category: data.category,
+        tags: data.tags || [],
+      });
+    } catch (error) {
+      logger.warn('Failed to generate embedding during knowledge creation', error);
+    }
 
     const knowledge = await prisma.knowledgeBase.create({
       data: {
@@ -13,7 +28,8 @@ export class KnowledgeController {
         content: data.content,
         category: data.category,
         tags: data.tags || [],
-        workspaceId,
+        embedding,
+        workspaceId: workspace.id,
       },
     });
 
@@ -21,11 +37,11 @@ export class KnowledgeController {
   }
 
   async list(c: Context) {
-    const { workspaceId } = c.req.param();
+    const workspace = c.get('workspace');
     const { category, page = '1', limit = '20' } = c.req.query();
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const where: any = { workspaceId };
+    const where: any = { workspaceId: workspace.id };
 
     if (category) where.category = category;
 
@@ -51,10 +67,14 @@ export class KnowledgeController {
   }
 
   async get(c: Context) {
+    const workspace = c.get('workspace');
     const { id } = c.req.param();
 
-    const knowledge = await prisma.knowledgeBase.findUnique({
-      where: { id },
+    const knowledge = await prisma.knowledgeBase.findFirst({
+      where: {
+        id,
+        workspaceId: workspace.id,
+      },
     });
 
     if (!knowledge) {
@@ -65,22 +85,69 @@ export class KnowledgeController {
   }
 
   async update(c: Context) {
+    const workspace = c.get('workspace');
     const { id } = c.req.param();
     const data = c.get('validated');
 
+    const existingKnowledge = await prisma.knowledgeBase.findFirst({
+      where: {
+        id,
+        workspaceId: workspace.id,
+      },
+    });
+
+    if (!existingKnowledge) {
+      throw new ApiError('Knowledge article not found', 404);
+    }
+
+    let embedding = existingKnowledge.embedding;
+    const shouldRegenerateEmbedding =
+      typeof data.title !== 'undefined' ||
+      typeof data.content !== 'undefined' ||
+      typeof data.category !== 'undefined' ||
+      typeof data.tags !== 'undefined';
+
+    if (shouldRegenerateEmbedding) {
+      try {
+        embedding = await geminiService.generateKnowledgeEmbedding({
+          title: data.title ?? existingKnowledge.title,
+          content: data.content ?? existingKnowledge.content,
+          category: data.category ?? existingKnowledge.category,
+          tags: data.tags ?? existingKnowledge.tags,
+        });
+      } catch (error) {
+        logger.warn('Failed to regenerate embedding during knowledge update', error);
+      }
+    }
+
     const knowledge = await prisma.knowledgeBase.update({
-      where: { id },
-      data,
+      where: { id: existingKnowledge.id },
+      data: {
+        ...data,
+        embedding,
+      },
     });
 
     return successResponse(c, { knowledge }, 'Knowledge updated successfully');
   }
 
   async delete(c: Context) {
+    const workspace = c.get('workspace');
     const { id } = c.req.param();
 
+    const knowledge = await prisma.knowledgeBase.findFirst({
+      where: {
+        id,
+        workspaceId: workspace.id,
+      },
+    });
+
+    if (!knowledge) {
+      throw new ApiError('Knowledge article not found', 404);
+    }
+
     await prisma.knowledgeBase.delete({
-      where: { id },
+      where: { id: knowledge.id },
     });
 
     return successResponse(c, {}, 'Knowledge deleted successfully');

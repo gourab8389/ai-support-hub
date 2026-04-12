@@ -20,3 +20,11 @@ export const inviteMemberSchema = z.object({
   email: z.string().email(),
   role: z.enum(['ADMIN', 'AGENT', 'MEMBER']),
 });
+
+export const generateApiKeySchema = z.object({
+  name: z.string().min(2, 'API key name must be at least 2 characters'),
+});
+
+export const updateMemberRoleSchema = z.object({
+  role: z.enum(['ADMIN', 'AGENT', 'MEMBER']),
+});

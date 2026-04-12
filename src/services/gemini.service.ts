@@ -1,6 +1,28 @@
+import { TaskType } from "@google/generative-ai";
 import { geminiModels, geminiConfig } from "@/config/gemini";
 import { prisma } from "@/config/database";
 import { logger } from "@/utils/logger";
+
+interface KnowledgeDocumentInput {
+  title: string;
+  content: string;
+  category?: string | null;
+  tags?: string[];
+}
+
+interface RankedKnowledgeItem {
+  id: string;
+  title: string;
+  content: string;
+  category: string | null;
+  tags: string[];
+  embedding: string | null;
+  workspaceId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const MAX_SEMANTIC_CANDIDATES = 200;
 
 export class GeminiService {
   async analyzeQuery(
@@ -9,12 +31,7 @@ export class GeminiService {
     context?: Record<string, any>
   ): Promise<any> {
     try {
-      // Get knowledge base for context
-      const knowledgeBase = await prisma.knowledgeBase.findMany({
-        where: { workspaceId },
-        take: 10,
-        orderBy: { updatedAt: "desc" },
-      });
+      const knowledgeBase = await this.searchKnowledge(query, workspaceId, 10);
 
       const contextText = knowledgeBase
         .map(
@@ -83,10 +100,165 @@ export class GeminiService {
     }
   }
 
-  async generateEmbedding(text: string): Promise<string> {
-    // For production, use a proper embedding model
-    // This is a simplified version
-    return Buffer.from(text).toString("base64");
+  private buildKnowledgeDocumentText(document: KnowledgeDocumentInput): string {
+    const sections = [
+      `Title: ${document.title}`,
+      `Content: ${document.content}`,
+    ];
+
+    if (document.category) {
+      sections.push(`Category: ${document.category}`);
+    }
+
+    if (document.tags && document.tags.length > 0) {
+      sections.push(`Tags: ${document.tags.join(", ")}`);
+    }
+
+    return sections.join("\n");
+  }
+
+  private parseEmbedding(embedding: string | null): number[] | null {
+    if (!embedding) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(embedding);
+
+      if (
+        Array.isArray(parsed) &&
+        parsed.every((value) => typeof value === "number")
+      ) {
+        return parsed;
+      }
+    } catch (error) {
+      logger.warn("Failed to parse stored embedding", error);
+    }
+
+    return null;
+  }
+
+  private cosineSimilarity(a: number[], b: number[]): number {
+    if (!a.length || a.length !== b.length) {
+      return 0;
+    }
+
+    let dotProduct = 0;
+    let magnitudeA = 0;
+    let magnitudeB = 0;
+
+    for (let index = 0; index < a.length; index += 1) {
+      dotProduct += a[index] * b[index];
+      magnitudeA += a[index] * a[index];
+      magnitudeB += b[index] * b[index];
+    }
+
+    if (!magnitudeA || !magnitudeB) {
+      return 0;
+    }
+
+    return dotProduct / (Math.sqrt(magnitudeA) * Math.sqrt(magnitudeB));
+  }
+
+  private keywordScore(query: string, article: RankedKnowledgeItem): number {
+    const normalizedQuery = query.toLowerCase();
+    const searchTerms = normalizedQuery.split(/\s+/).filter(Boolean);
+    const title = article.title.toLowerCase();
+    const content = article.content.toLowerCase();
+    const category = article.category?.toLowerCase() || "";
+    const tags = article.tags.map((tag) => tag.toLowerCase());
+
+    let score = 0;
+
+    if (title.includes(normalizedQuery)) {
+      score += 4;
+    }
+
+    if (content.includes(normalizedQuery)) {
+      score += 2;
+    }
+
+    if (category && category.includes(normalizedQuery)) {
+      score += 1.5;
+    }
+
+    for (const term of searchTerms) {
+      if (title.includes(term)) {
+        score += 1.5;
+      }
+
+      if (content.includes(term)) {
+        score += 0.5;
+      }
+
+      if (category.includes(term)) {
+        score += 0.5;
+      }
+
+      if (tags.some((tag) => tag.includes(term))) {
+        score += 1;
+      }
+    }
+
+    return score;
+  }
+
+  private async keywordFallbackSearch(
+    query: string,
+    workspaceId: string,
+    limit: number
+  ): Promise<any[]> {
+    const searchTerms = query.toLowerCase().split(/\s+/).filter(Boolean);
+
+    return prisma.knowledgeBase.findMany({
+      where: {
+        workspaceId,
+        OR: [
+          { title: { contains: query, mode: "insensitive" } },
+          { content: { contains: query, mode: "insensitive" } },
+          { category: { contains: query, mode: "insensitive" } },
+          ...searchTerms.map((term) => ({ tags: { has: term } })),
+        ],
+      },
+      take: limit,
+      orderBy: { updatedAt: "desc" },
+    });
+  }
+
+  async generateEmbedding(
+    text: string,
+    taskType: TaskType = TaskType.RETRIEVAL_DOCUMENT
+  ): Promise<string> {
+    const normalizedText = text.trim();
+
+    if (!normalizedText) {
+      return JSON.stringify([]);
+    }
+
+    const response = await geminiModels.embedding.embedContent({
+      content: {
+        role: "user",
+        parts: [{ text: normalizedText }],
+      },
+      taskType,
+    });
+
+    const values = response.embedding.values;
+
+    if (!values || values.length === 0) {
+      throw new Error("Gemini embedding response was empty");
+    }
+
+    return JSON.stringify(values);
+  }
+
+  async generateKnowledgeEmbedding(
+    document: KnowledgeDocumentInput
+  ): Promise<string> {
+    return this.generateEmbedding(
+      this.buildKnowledgeDocumentText(document),
+      TaskType.RETRIEVAL_DOCUMENT
+    );
   }
 
   async searchKnowledge(
@@ -94,24 +266,68 @@ export class GeminiService {
     workspaceId: string,
     limit = 5
   ): Promise<any[]> {
-    const searchTerms = query.toLowerCase().split(" ");
+    const normalizedQuery = query.trim();
 
-    const results = await prisma.knowledgeBase.findMany({
-      where: {
-        workspaceId,
-        OR: [
-          { title: { contains: query, mode: "insensitive" } },
-          { content: { contains: query, mode: "insensitive" } },
-          { category: { contains: query, mode: "insensitive" } },
-          // Search if ANY tag matches ANY word in query
-          ...searchTerms.map((term) => ({ tags: { has: term } })),
-        ],
-      },
-      take: limit,
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    const candidates = await prisma.knowledgeBase.findMany({
+      where: { workspaceId },
+      take: MAX_SEMANTIC_CANDIDATES,
       orderBy: { updatedAt: "desc" },
     });
 
-    return results;
+    if (!candidates.length) {
+      return [];
+    }
+
+    let queryEmbedding: number[] | null = null;
+
+    try {
+      const rawQueryEmbedding = await this.generateEmbedding(
+        normalizedQuery,
+        TaskType.RETRIEVAL_QUERY
+      );
+      queryEmbedding = this.parseEmbedding(rawQueryEmbedding);
+    } catch (error) {
+      logger.warn("Query embedding failed, using keyword-only search", error);
+    }
+
+    const ranked = candidates
+      .map((article) => {
+        const semanticEmbedding = this.parseEmbedding(article.embedding);
+        const semanticScore =
+          queryEmbedding && semanticEmbedding
+            ? this.cosineSimilarity(queryEmbedding, semanticEmbedding)
+            : 0;
+        const keywordScore = this.keywordScore(normalizedQuery, article);
+        const normalizedKeywordScore = Math.min(keywordScore / 5, 1);
+        const combinedScore = queryEmbedding
+          ? semanticScore * 0.8 + normalizedKeywordScore * 0.2
+          : normalizedKeywordScore;
+
+        return {
+          article,
+          combinedScore,
+          keywordScore,
+          semanticScore,
+        };
+      })
+      .filter((item) => item.semanticScore > 0.15 || item.keywordScore > 0)
+      .sort((left, right) => {
+        if (right.combinedScore !== left.combinedScore) {
+          return right.combinedScore - left.combinedScore;
+        }
+
+        return right.article.updatedAt.getTime() - left.article.updatedAt.getTime();
+      });
+
+    if (ranked.length === 0) {
+      return this.keywordFallbackSearch(normalizedQuery, workspaceId, limit);
+    }
+
+    return ranked.slice(0, limit).map((item) => item.article);
   }
 
   async summarizeConversation(messages: any[]): Promise<string> {
