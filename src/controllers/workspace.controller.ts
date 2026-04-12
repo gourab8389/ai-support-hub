@@ -168,6 +168,68 @@ export class WorkspaceController {
 
     return successResponse(c, { apiKey }, 'API key generated successfully', 201);
   }
+  async inviteMember(c: Context) {
+  const { workspaceId } = c.req.param();
+  const user = c.get('user');
+  const { email, role } = c.get('validated');
+
+  const member = await prisma.workspaceMember.findFirst({
+    where: { workspaceId, userId: user.id, role: { in: ['OWNER', 'ADMIN'] } },
+  });
+
+  if (!member) throw new ApiError('Insufficient permissions', 403);
+
+  const invitedUser = await prisma.user.findUnique({ where: { email } });
+  if (!invitedUser) throw new ApiError('User not found', 404);
+
+  const existing = await prisma.workspaceMember.findUnique({
+    where: { userId_workspaceId: { userId: invitedUser.id, workspaceId } },
+  });
+
+  if (existing) throw new ApiError('User already a member', 409);
+
+  const newMember = await prisma.workspaceMember.create({
+    data: { userId: invitedUser.id, workspaceId, role },
+    include: { user: { select: { id: true, name: true, email: true } } },
+  });
+
+  return successResponse(c, { member: newMember }, 'Member invited successfully', 201);
+}
+
+async removeMember(c: Context) {
+  const { workspaceId, memberId } = c.req.param();
+  const user = c.get('user');
+
+  const member = await prisma.workspaceMember.findFirst({
+    where: { workspaceId, userId: user.id, role: { in: ['OWNER', 'ADMIN'] } },
+  });
+
+  if (!member) throw new ApiError('Insufficient permissions', 403);
+
+  await prisma.workspaceMember.delete({ where: { id: memberId } });
+
+  return successResponse(c, {}, 'Member removed successfully');
+}
+
+async updateMemberRole(c: Context) {
+  const { workspaceId, memberId } = c.req.param();
+  const user = c.get('user');
+  const { role } = await c.req.json();
+
+  const member = await prisma.workspaceMember.findFirst({
+    where: { workspaceId, userId: user.id, role: 'OWNER' },
+  });
+
+  if (!member) throw new ApiError('Only owners can change roles', 403);
+
+  const updated = await prisma.workspaceMember.update({
+    where: { id: memberId },
+    data: { role },
+    include: { user: { select: { id: true, name: true, email: true } } },
+  });
+
+  return successResponse(c, { member: updated }, 'Role updated successfully');
+}
 }
 
 export const workspaceController = new WorkspaceController();
