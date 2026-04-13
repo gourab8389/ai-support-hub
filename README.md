@@ -1,6 +1,6 @@
-# AI Support Hub — Server
+# SupportAI – AI-Powered Customer Support Platform(Server)
 
-AI Support Hub is an AI-powered customer support backend (similar to Intercom, Zendesk, or Freshdesk).
+SupportAI is an AI-powered customer support backend (similar to Intercom, Zendesk, or Freshdesk).
 
 - Customers ask questions via a chat widget on your website
 - An AI assistant searches your company's Knowledge Base and answers when possible
